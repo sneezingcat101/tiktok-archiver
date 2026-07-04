@@ -20,13 +20,16 @@ def bad_url(is_list: bool = False, index: Optional[int] = None, type: Literal["b
     if type == "dupe":
         messagebox.showwarning(title="Warning", message=f"This URL is already in the list!")
 
-#-- Check validity of URL
+#-- Check validity of URLs and remove duplicates (returns list or a str)
 def check_URLs(raw_url: ctk.CTkEntry, is_list: bool = False):
     # Grab the raw URLs string and split lines into list
-    raw_urls = raw_url.get().lower()
+    raw_urls = raw_url.get(0.0, ctk.END).lower()
     split_urls = raw_urls.splitlines()
-    dupes = set(url_entrybox.get(0.0, ctk.END).splitlines())
-    urls = []
+    
+    old_urls = set(url_entrybox.get(0.0, ctk.END).splitlines())
+    
+    urls = set()
+    
     
     ## URL Checks
     for index, url in enumerate(split_urls):
@@ -53,16 +56,18 @@ def check_URLs(raw_url: ctk.CTkEntry, is_list: bool = False):
             bad_url(is_list, index)
             return
         
-        # Check duplicates for entry adding
-        if not is_list and parsed.scheme + "://" + parsed.netloc + parsed.path in dupes:
+        # Weak duplicate check if returning str
+        if not is_list and parsed.scheme + "://" + parsed.netloc + parsed.path in old_urls:
             bad_url(type="dupe")
             return
         
-        # Rebuild URL and append to new list
-        urls.append(parsed.scheme + "://" + parsed.netloc + parsed.path)
+        # Set automatically removes duplicates
+        urls.add(parsed.scheme + "://" + parsed.netloc + parsed.path)
         
+    
     # Returns either a list or a string
-    return urls if is_list else urls[0]
+    print(urls)
+    return list(urls) if is_list else list(urls)[0]
 
 
 ##~ URL Adding Functions
@@ -84,7 +89,10 @@ def browse_path():
 ##~ Download Functions
 #-- Prepare download and start
 def download():
-    urls = check_URLs(url_entrybox, False)
+    # Prepare URLs
+    clean_urls()
+    urls = check_URLs(url_entrybox, True)
+    clean_urls(urls)
     
     # Download each video
 
@@ -95,9 +103,24 @@ def clear_urls():
     if (response):
         url_entrybox.delete(0.0, ctk.END)
         
-#-- Check for duplicate URLs and clean up URLs before downloading
-def clean_urls(urls):
-    print()
+#-- Clean up Textbox duplicates and URL formatting before downloads
+def clean_urls(urls = None):
+    raw_urls = url_entrybox.get(0.0, ctk.END).strip()
+    
+    # Clean up empty newlines and weak initial duplicate removal
+    if not urls:
+        urls_set = set(raw_urls.splitlines())
+        urls_set.discard("")
+        
+        url_entrybox.delete(0.0, ctk.END)
+        url_entrybox.insert(0.0, "\n".join(urls_set))
+        
+    
+    # Replace textbox URLs with clean ones
+    if urls:
+        clean_urls = "\n".join(urls)
+        url_entrybox.delete(0.0, ctk.END)
+        url_entrybox.insert(0.0, clean_urls)
 
 ##~~ UI ~~##
 root = ctk.CTk()
