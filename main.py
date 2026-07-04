@@ -1,6 +1,7 @@
 import customtkinter as ctk
-from tkinter import filedialog
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
+from urllib.parse import urlparse
+from typing import Literal, Optional
 
 root = ctk.CTk()
 
@@ -31,10 +32,73 @@ topleft_lowerframe.pack(fill="x", side=ctk.TOP,)
 topleft_lowerframe.pack_propagate(False)
 
 # URL Textbox
-ctk.CTkEntry(topleft_frame, width=230, text_color="black", fg_color="white", corner_radius=0, border_width=1, placeholder_text="Enter Video URL").pack(pady=4, padx=(4,0),side=ctk.LEFT)
+url_entryline = ctk.CTkEntry(topleft_frame, width=230, text_color="black", fg_color="white", corner_radius=0, border_width=1, placeholder_text="Enter Video URL")
+url_entryline.pack(pady=4, padx=(4,0),side=ctk.LEFT)
+
+# Error Messageboxes
+def bad_url(is_list: bool = False, index: Optional[int] = None, type: Literal["badURL", "notVideo"] = "badURL"):
+    if is_list and type == "badURL":
+        messagebox.showwarning(title="Warning", message=f"Invalid Tiktok URL in line {index + 1}.") 
+    elif type == "badURL":
+        messagebox.showwarning(title="Warning", message=f"Invalid Tiktok URL.")
+    
+    if is_list and type == "notVideo":
+        messagebox.showwarning(title="Warning", message=f"URL in line {index + 1} does not link to a valid video.") 
+    elif type == "notVideo":
+        messagebox.showwarning(title="Warning", message=f"URL does not link to a valid video.")
+
+# Check validity of URL
+def check_URLs(raw_url: ctk.CTkEntry, is_list: bool = False):
+    # Grab the raw URLs string and split lines into list
+    raw_urls = raw_url.get().lower()
+    split_urls = raw_urls.splitlines()
+    urls = []
+    
+    ## URL Checks
+    for index, url in enumerate(split_urls):
+        # urlparse returns tuple with scheme (https), netloc (www.tiktok.com), path (/@user/video/videoId), params, query, fragment
+        parsed = urlparse(url)
+        
+        # Check if valid tiktok link
+        if parsed.scheme + "://" + parsed.netloc != "https://www.tiktok.com":
+            bad_url(is_list, index)
+            return
+            
+        # Check link structure and if valid video URL
+        path = parsed.path[1:-1].split("/")
+        # has username
+        if "@" not in path[0]:
+            bad_url(is_list, index)
+            return
+        # has 'video'
+        if "video" not in path[1]:
+            bad_url(is_list, index, "notVideo")
+            return
+        # has videoID
+        if not path[2].isdigit():
+            bad_url(is_list, index)
+            return
+        
+        # Rebuild URL and append to new list
+        urls.append(parsed.scheme + "://" + parsed.netloc + parsed.path)
+        
+    # Returns either a list or a string
+    return urls if is_list else urls[0]
+
+# Add Video URL to URLs Textbox
+def add_URL():
+    url = check_URLs(url_entryline)
+    
+    # Insert the URL with a newline. If no previous newline, one is added.
+    if url:
+        url_entrybox.insert(0.0, url + "\n" if (url_entrybox.get(0.0, ctk.END))[-1:-3] or url_entrybox.get(0.0, ctk.END) else "\n" + url + "\n")
+    
+    
+    
+    
 
 # "Add" Button
-ctk.CTkButton(topleft_frame, border_width=1, text="Add", width=35, fg_color="white", text_color="black", corner_radius=0).pack(pady=4, padx=(0,4), side=ctk.RIGHT)
+ctk.CTkButton(topleft_frame, border_width=1, text="Add", width=35, fg_color="white", text_color="black", corner_radius=0, command=add_URL).pack(pady=4, padx=(0,4), side=ctk.RIGHT)
 
 # File Directory Textbox
 dir_entry = ctk.CTkEntry(topleft_lowerframe, width=240, text_color="black", fg_color="white", corner_radius=0, border_width=1, placeholder_text="File directory")
@@ -44,8 +108,8 @@ dir_entry.pack(pady=4, padx=(4,0),side=ctk.LEFT)
 def browse_path():
     path = filedialog.askdirectory()
     if path:
-        dir_entry.delete(0.0, ctk.END)
-        dir_entry.insert(0.0, path)
+        dir_entry.delete(0, ctk.END)
+        dir_entry.insert(0, path)
 
 # File Directory Selection Button
 ctk.CTkButton(topleft_lowerframe, border_width=1, text="⋯", width=25, fg_color="white", text_color="black", corner_radius=0, font=("Arial", 30), command=browse_path).pack(pady=4, padx=(0,4), side=ctk.RIGHT)
@@ -62,32 +126,26 @@ ctk.CTkLabel(topright_frame, text="Options", fg_color="transparent", text_color=
 #-- Left
 
 # URLs Textbox
-url_entry = ctk.CTkTextbox(left_frame, text_color="black", fg_color="white", corner_radius=0, border_width=1, font=("Arial", 10), wrap="none")
-url_entry.pack(fill="x", side=ctk.TOP, padx=4, pady=4)
+url_entrybox = ctk.CTkTextbox(left_frame, text_color="black", fg_color="white", corner_radius=0, border_width=1, font=("Arial", 10), wrap="none")
+url_entrybox.pack(fill="x", side=ctk.TOP, padx=4, pady=4)
 
 # Clear the URLs Textbox
 def clear_urls():
     response = messagebox.askyesno(title="Warning", message="Are you sure you would like to clear all URLs? This cannot be reverted.")
     if (response):
-        url_entry.delete(0.0, ctk.END)
+        url_entrybox.delete(0.0, ctk.END)
         
-def prepare_urls():
-    # Grab the raw text and split each line into items of URLs list
-    urls = url_entry.get(0.0, ctk.END).lower().splitlines()
-    for index, url in enumerate(urls):
-        # Check if valid tiktok link
-        if url[0:24] != "https://www.tiktok.com/@":
-            messagebox.showwarning(title="Warning", message=f"Invalid URL in line {index + 1}.")
-            
-        # Check if valid video
-        if "video" not in url:
-            messagebox.showwarning(title="Warning", message=f"Entry in line {index + 1} is not a valid video.")
+def download():
+    urls = check_URLs(url_entrybox, False)
+    
+    # Download each video
+    
             
             
 
 # Download Button
-ctk.CTkButton(left_frame, border_width=1, text="Download", width=35, fg_color="white", text_color="black", corner_radius=0, command=prepare_urls).pack(pady=4, padx=(0,4), side=ctk.RIGHT)
-ctk.CTkButton(left_frame, border_width=1, text="Clear", width=35, fg_color="white", text_color="black", corner_radius=0, command=clear_urls).pack(pady=4, padx=(0,4), side=ctk.RIGHT)
+ctk.CTkButton(left_frame, border_width=1, text="Download", width=35, fg_color="white", text_color="black", corner_radius=0, command=download).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
+ctk.CTkButton(left_frame, border_width=1, text="Clear", width=35, fg_color="white", text_color="black", corner_radius=0, command=clear_urls).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
 
 ##
 root.mainloop()
