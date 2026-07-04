@@ -105,12 +105,14 @@ def clear_urls():
         
 #-- Clean up Textbox duplicates and URL formatting before downloads
 def clean_urls(urls = None):
-    raw_urls = url_entrybox.get(0.0, ctk.END).strip()
+    raw_urls = url_entrybox.get(0.0, ctk.END)
     
     # Clean up empty newlines and weak initial duplicate removal
     if not urls:
-        urls_set = set(raw_urls.splitlines())
-        urls_set.discard("")
+        urls_set = set()
+        for line in raw_urls.splitlines():
+            line = line.strip()
+            if not line == "": urls_set.add(line)
         
         url_entrybox.delete(0.0, ctk.END)
         url_entrybox.insert(0.0, "\n".join(urls_set))
