@@ -3,134 +3,131 @@ from tkinter import filedialog, messagebox
 from urllib.parse import urlparse
 from typing import Literal, Optional
 
+##~~ GLOBAL VARIABLES ~~##
+valid_urls = []
+entered_urls = []
+err = {}
+seen = set()
+
+
 ##~~ FUNCTIONS ~~##
 ##~ URL Checks
-#-- Parse URL and check if valid Tiktok Video then rebuild URL
-def rebuild_url(url: str, index: Optional[int] = None, showError: bool = False, is_batch: bool = False):
-    # urlparse returns tuple with scheme (https), netloc (www.tiktok.com), path (/@user/video/videoId), params, query, fragment
-    parsed = urlparse(url)
-        
-    # Check if valid tiktok link (always drops garbage)
-    if parsed.scheme + "://" + parsed.netloc != "https://www.tiktok.com":
-        if showError: bad_url(index = index)
-        return (None, False)
- 
-    # Check link structure and if valid video URL
-    path = parsed.path[1:].split("/")
-    
-    ## Checks, maintain incomplete URL to help keep track of links
-    # has valid link structure
-    if len(path) != 3:
-        if showError: bad_url("incompleteURL", index)
-        return (url, False) if is_batch else (None, False)
-    # has username
-    if "@" not in path[0]:
-        if showError: bad_url("incompleteURL", index)
-        return (url, False) if is_batch else (None, False)
-    # has 'video'
-    if "video" not in path[1]:
-        if showError: bad_url("notVideo", index)
-        return (url, False) if is_batch else (None, False)
-    # has videoID
-    if not path[2].isdigit():
-        if showError: bad_url("incompleteURL", index)
-        return (url, False) if is_batch else (None, False)
-    # rebuild new URL
-    return parsed.scheme + "://" + parsed.netloc + parsed.path, True
-    
-#-- Error Messageboxes
-def bad_url(type: Literal["badURL", "notVideo", "dupe", "incompleteURL"] = "badURL", index: Optional[int] = None):
-    if index is not None and type == "badURL":
+#-- Pre-defined Error Messageboxes
+def display_error(type: Literal["invalid", "duplicate", "incomplete"] = "invalid", index: int = None):
+    if index is not None and type == "invalid":
         messagebox.showwarning(title="Warning", message=f"Invalid Tiktok URL in line {index + 1}.") 
-    elif type == "badURL":
+    elif type == "invalid":
         messagebox.showwarning(title="Warning", message=f"Invalid Tiktok URL.")
         
-    if index is not None and type == "incompleteURL":
+    if index is not None and type == "incomplete":
         messagebox.showwarning(title="Warning", message=f"Incomplete Tiktok URL at line {index + 1}.") 
-    elif type == "incompleteURL":
+    elif type == "incomplete":
         messagebox.showwarning(title="Warning", message=f"Incomplete Tiktok URL.")
-    
-    if index is not None and type == "notVideo":
-        messagebox.showwarning(title="Warning", message=f"URL in line {index + 1} does not link to a valid video.") 
-    elif type == "notVideo":
-        messagebox.showwarning(title="Warning", message=f"URL does not link to a valid video.")
-    
-    if type == "dupe":
+        
+    if type == "duplicate":
         messagebox.showwarning(title="Warning", message=f"This URL is already in the list!")
-
-#-- Check validity of URLs, rewrite textboxes, remove duplicates (returns reformatted URLs list)
-def check_URLs(raw_url: Optional[str] = None):
-    valid = True
-    seen = set()
-    urls = []
     
-    # Get and rebuild the URLs already in textBox 'urls' list and 'seen' set().
+#-- Rebuild URL link (remove garbage at the end)
+def rebuild(url):
+    parsed = urlparse(url)
+    
+    # return example: "https://www.tiktok.com/@btimbklm96485/video/7608125327763574029"
+    return parsed.scheme + "://" + parsed.netloc + parsed.path
+
+#-- Classify URL by parsing and then performing checks (returns "invalid", incomplete", and "valid" accordingly)
+def classify_url(url):
+    # urlparse returns tuple with scheme (https), netloc (www.tiktok.com), path (/@user/video/videoId), params, query, fragment
+    parsed = urlparse(url)
+    
+    if parsed.scheme + "://" + parsed.netloc != "https://www.tiktok.com":
+        return "invalid"
+    
+    path = parsed.path[1:].split("/")
+    
+    # Check link structure and if valid video URL
+    if len(path) != 3 or "@" not in path[0] or path[1] not in ("video", "photo") or not path[2].isdigit():
+        return "incomplete"
+    
+    return "valid"
+
+#-- Clean up the pre-existing entries. Changes entered_urls for entries only in textbox.
+def clean_entries():
+    seen.clear()
+    valid_urls.clear()
+    entered_urls.clear()
+    err.clear()
+
+    # Get, check, and sort the URLs. 
+    # Removes any duplicates, cleans white space and empty lines, ignores garbage
     for index, line in enumerate(url_entrybox.get(0.0, ctk.END).lower().splitlines()):
-        line, ok = rebuild_url(line.strip(), None if raw_url else index, False if raw_url else True, False if raw_url else True)
-        if line: 
-            if line not in seen: urls.append(line)
+        status = classify_url(line.strip())
+        
+        if status == "valid": 
+            line = rebuild(line)
+            if line not in seen: 
+                valid_urls.append(line)
+                entered_urls.append(line)
             seen.add(line)
-        if not ok: valid = False
+            
+        if status == "incomplete":
+            entered_urls.append(line)
+            seen.add(line)
+            if not err:
+                err[len(entered_urls) - 1] = status
     
-    # Logic below runs only if adding via 'add' button
-    if raw_url:
-        added_url, _ = rebuild_url(raw_url, showError=True, is_batch=False)
-    else:
-        added_url = None
+def update_textbox():
+    url_entrybox.delete(0.0, ctk.END)
+    url_entrybox.insert(0.0, "\n".join(entered_urls))
     
-    if added_url and added_url not in seen:
-        urls.append(added_url)
-        clean_urls(urls)
-        return None
-    elif added_url and added_url in seen:
-        bad_url(type="dupe")
-        clean_urls(urls)
-        return None
-    elif added_url:
-        clean_urls(urls)
-        return None
-    
-    return urls if valid == True else None
-
-##~ URL Adding Functions
-#-- Add Video URL to URLs Textbox
 def add_URL():
-    if not url_entryline.get():
-        bad_url(type="badURL")
-    else:
-        check_URLs(url_entryline.get())
-
+    url = url_entryline.get()
+    
+    if not url:
+        display_error()
+        return
+    
+    status = classify_url(url)
+    if status != "valid":
+        display_error(status)
+        return
+    
+    clean_entries()
+    
+    if rebuild(url) in seen:
+        display_error("duplicate")
+        return
+    
+    entered_urls.append(rebuild(url))
+    update_textbox()
+    
+def download():
+    clean_entries()
+    
+    update_textbox()
+    
+    if err:
+        update_textbox()
+        display_error(next(iter(err.values())), next(iter(err)))
+        return
+    
+    # download starts below
+    
+    
+    
+    
+##~ Button Functions
 #-- Search for path
 def browse_path():
     path = filedialog.askdirectory()
     if path:
         dir_entry.delete(0, ctk.END)
         dir_entry.insert(0, path)
-        
-##~ Download Functions
-#-- Prepare download and start
-def download():
-    # Check URLs
-    urls = check_URLs()
-    
-    # Download each video
-    if urls:
-        # Placeholder
-        print()
 
-##~ Cleaning Functions
 #-- Clear the URLs Textbox
 def clear_urls():
     response = messagebox.askyesno(title="Warning", message="Are you sure you would like to clear all URLs? This cannot be reverted.")
     if (response):
         url_entrybox.delete(0.0, ctk.END)
-        
-#-- Clean up Textbox duplicates and URL formatting before downloads
-def clean_urls(urls):
-    # Replace textbox URLs with clean ones
-    formatted_urls = "\n".join(urls)
-    url_entrybox.delete(0.0, ctk.END)
-    url_entrybox.insert(0.0, formatted_urls)
 
 ##~~ UI ~~##
 root = ctk.CTk()
