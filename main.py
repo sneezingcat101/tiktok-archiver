@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from urllib.parse import urlparse
-from typing import Literal, Optional
+from typing import Literal
 
 ##~~ GLOBAL VARIABLES ~~##
 valid_urls = []
@@ -9,9 +9,8 @@ entered_urls = []
 err = {}
 seen = set()
 
-
 ##~~ FUNCTIONS ~~##
-##~ URL Checks
+##~ URL-handling Functions
 #-- Pre-defined Error Messageboxes
 def display_error(type: Literal["invalid", "duplicate", "incomplete"] = "invalid", index: int = None):
     if index is not None and type == "invalid":
@@ -39,12 +38,13 @@ def classify_url(url):
     # urlparse returns tuple with scheme (https), netloc (www.tiktok.com), path (/@user/video/videoId), params, query, fragment
     parsed = urlparse(url)
     
+    # Check if valid Tiktok link
     if parsed.scheme + "://" + parsed.netloc != "https://www.tiktok.com":
         return "invalid"
     
     path = parsed.path[1:].split("/")
     
-    # Check link structure and if valid video URL
+    # Check link structure and if valid video/photo URL
     if len(path) != 3 or "@" not in path[0] or path[1] not in ("video", "photo") or not path[2].isdigit():
         return "incomplete"
     
@@ -52,6 +52,7 @@ def classify_url(url):
 
 #-- Clean up the pre-existing entries. Changes entered_urls for entries only in textbox.
 def clean_entries():
+    # Clean up global functions
     seen.clear()
     valid_urls.clear()
     entered_urls.clear()
@@ -59,33 +60,35 @@ def clean_entries():
 
     # Get, check, and sort the URLs. 
     # Removes any duplicates, cleans white space and empty lines, ignores garbage
-    for index, line in enumerate(url_entrybox.get(0.0, ctk.END).lower().splitlines()):
+    for line in url_entrybox.get(0.0, ctk.END).lower().splitlines():
         status = classify_url(line.strip())
         
+        # Add to global lists if status returns valid
         if status == "valid": 
             line = rebuild(line)
             if line not in seen: 
                 valid_urls.append(line)
                 entered_urls.append(line)
             seen.add(line)
-            
+        
+        # Add only to entered_urls and the first error is marked
         if status == "incomplete":
             entered_urls.append(line)
             seen.add(line)
             if not err:
                 err[len(entered_urls) - 1] = status
     
-def update_textbox():
-    url_entrybox.delete(0.0, ctk.END)
-    url_entrybox.insert(0.0, "\n".join(entered_urls))
-    
+##~ Button Functions
+#-- Function for the 'add' button of the single line URL entry
 def add_URL():
     url = url_entryline.get()
     
+    # Check if entry is empty
     if not url:
         display_error()
         return
     
+    # Check if entry is a URL
     status = classify_url(url)
     if status != "valid":
         display_error(status)
@@ -93,29 +96,29 @@ def add_URL():
     
     clean_entries()
     
+    # Rebuild URL and check for duplicates
     if rebuild(url) in seen:
         display_error("duplicate")
         return
     
+    # Add newly cleaned URL to the global list and update the URLs Textbox
     entered_urls.append(rebuild(url))
     update_textbox()
-    
+
+#-- Function for the 'download' button to begin the process of downloading off the list
 def download():
+    # Clean URLs and update the Textbox for the errors to display correctly and cleanly
     clean_entries()
-    
     update_textbox()
     
+    # Popup error if an unfinished link is found.
     if err:
         update_textbox()
         display_error(next(iter(err.values())), next(iter(err)))
         return
     
     # download starts below
-    
-    
-    
-    
-##~ Button Functions
+
 #-- Search for path
 def browse_path():
     path = filedialog.askdirectory()
@@ -128,6 +131,12 @@ def clear_urls():
     response = messagebox.askyesno(title="Warning", message="Are you sure you would like to clear all URLs? This cannot be reverted.")
     if (response):
         url_entrybox.delete(0.0, ctk.END)
+        
+##~ UI-related Functions
+#-- Update the textbox with the most recent clean URLs
+def update_textbox():
+    url_entrybox.delete(0.0, ctk.END)
+    url_entrybox.insert(0.0, "\n".join(entered_urls))
 
 ##~~ UI ~~##
 root = ctk.CTk()
@@ -190,9 +199,18 @@ ctk.CTkLabel(topright_frame, text="Options", fg_color="transparent", text_color=
 url_entrybox = ctk.CTkTextbox(left_frame, text_color="black", fg_color="white", corner_radius=0, border_width=1, font=("Arial", 10), wrap="none")
 url_entrybox.pack(fill="x", side=ctk.TOP, padx=4, pady=4)
     
-#-- Download Button
+#-- Download/Clear Buttons
 ctk.CTkButton(left_frame, border_width=1, text="Download", width=35, fg_color="white", text_color="black", corner_radius=0, command=download).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
 ctk.CTkButton(left_frame, border_width=1, text="Clear", width=35, fg_color="white", text_color="black", corner_radius=0, command=clear_urls).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
+
+##~ Right
+#-- Toggles
+configs_box = ctk.CTkTextbox(right_frame, text_color="black", fg_color="white", corner_radius=0, border_width=1, font=("Arial", 10), wrap="none", height=230)
+configs_box.pack(fill="x", side=ctk.TOP, padx=4, pady=4)
+
+#-- Save/Reset config Buttons
+ctk.CTkButton(right_frame, border_width=1, text="Save", width=35, fg_color="white", text_color="black", corner_radius=0).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
+ctk.CTkButton(right_frame, border_width=1, text="Reset", width=35, fg_color="white", text_color="black", corner_radius=0).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
 
 ##
 root.mainloop()
