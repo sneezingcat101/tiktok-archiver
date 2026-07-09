@@ -3,6 +3,31 @@ import os
 from pathlib import Path
 from win32com.client import Dispatch
 from datetime import datetime
+import requests, json, re
+
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                  'AppleWebKit/537.36 (KHTML, like Gecko) '
+                  'Chrome/148.0.0.0 Safari/537.36',
+    'Accept-Language': 'en-US,en;q=0.9',
+}
+
+_user_cache = {}
+
+def extract_data(url: str):
+    response = requests.get(url, headers=HEADERS, timeout=10)
+    
+    response.raise_for_status()
+    
+    data = re.search(
+        r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)</script>',
+        response.text, re.DOTALL)
+    if not data:
+        return None
+    
+    return json.loads(data.group(1)).get('__DEFAULT_SCOPE__')
+
+print(extract_data("https://www.tiktok.com/@cat7cc"))
 
 def raws_folder(path) -> Path:
     if not path:
@@ -86,8 +111,8 @@ def write_metadata(info: dict, folder_path: str, timestamp: str):
     ]
     
     with open(folder_path / f"{timestamp}_info.txt", 'w', encoding='utf-8') as f:
-        f.write("##~~ Video Information:\n" + f"\n##~ Video URL: {info.get('original_url')}\n#-- " + "\n#-- ".join(video) + f"\n\nUploader URL: {info.get('uploader_url')}" + "\n".join(user) + f"\n\nSound URL: {info.get('channel_url')}" + "\n".join(sound))
+        f.write("##~~ Video Information:\n" + f"\n##~ Video URL: {info.get('original_url')}\n#-- " + "\n#-- ".join(video) + "##~~ Uploader Information:\n" + f"\n##~ Uploader URL: {info.get('uploader_url')}\n#-- " + "\n#-- ".join(user) + "##~~ Sound Information:\n" + f"\n##~ Sound URL: {info.get('uploader_url')}\n#-- " + "\n#-- ".join(sound))
 
 path = "C:/Users/neina/Desktop/Videos"
 
-download_video(["https://www.tiktok.com/@cat7cc/video/7619782378092776712"], path)
+#download_video(["https://www.tiktok.com/@cat7cc/video/7619782378092776712"], path)
