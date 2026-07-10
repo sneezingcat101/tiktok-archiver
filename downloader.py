@@ -14,20 +14,63 @@ HEADERS = {
 
 _user_cache = {}
 
-def extract_data(url: str):
-    response = requests.get(url, headers=HEADERS, timeout=10)
+def extract_data(url: str) -> dict:
+    response = requests.get(url, headers=HEADERS, timeout=20)
     
     response.raise_for_status()
     
-    data = re.search(
+    match = re.search(
         r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)</script>',
         response.text, re.DOTALL)
-    if not data:
+    if not match:
         return None
     
-    return json.loads(data.group(1)).get('__DEFAULT_SCOPE__')
+    return json.loads(match.group(1)).get('__DEFAULT_SCOPE__')
 
-print(extract_data("https://www.tiktok.com/@cat7cc"))
+def parse_data(creator_data: dict, video_data: dict) -> dict:
+    parsed_data = {}
+    
+    sound = video_data.get('webapp.video-detail').get('itemInfo').get('itemStruct').get('music')
+    
+    user_info = creator_data.get('webapp.user-detail').get('userInfo')
+    profile = user_info.get('user')
+    user_stats = user_info.get('statsV2')
+    
+    # creator data
+    # follows
+    if user_stats.get('followerCount'):
+        parsed_data['follower_count'] = user_stats.get('followerCount')
+    else:
+        parsed_data['follower_count'] = 'NoResultFound'
+        
+    if user_stats.get('followingCount'):
+        parsed_data['following_count'] = user_stats.get('followingCount')
+    else:
+        parsed_data['following_count'] = 'NoResultFound'
+        
+    # bio
+    if profile.get('signature'):
+        parsed_data['bio'] = profile.get('signature')
+    else:
+        parsed_data['bio'] = 'NoResultFound'
+        
+    # sound urls
+    # raw sound download url (to combat sounds url changes name changes)
+    if sound.get('playUrl'):
+        parsed_data['raw_sound_url'] = sound.get('playUrl').replace(r"\u00", "/")
+    else:
+        parsed_data['raw_sound_url'] = 'NoResultFound'
+    
+    # normal sound url
+    if sound.get('id') and sound.get('title'):
+        parsed_data['sound_url'] = "https://www.tiktok.com/music/" + sound.get('title').replace(" ", "-") + sound.get('id')
+    else:
+        parsed_data['sound_url'] = 'NoResultFound'
+        
+    return parsed_data
+    
+        
+    
 
 def raws_folder(path) -> Path:
     if not path:
@@ -77,16 +120,27 @@ def download_video(urls: list, path: str):
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=True)   # download once
             video_path = ydl.prepare_filename(info)  
-            
-        print("video path")
-        print(video_path)
-        print(info)
         
         create_shortcut(str(video_folder / f"{video_path}"), str(path / f"{timestamp}.lnk"))
         
         write_metadata(info, video_folder, timestamp)
 
 def write_metadata(info: dict, folder_path: str, timestamp: str):
+    video_url = info.get('original_url')
+    creator_url = info.get('uploader_url')
+    
+    creator_data = None
+    video_data = None
+    
+    retrieved = None
+    
+    if video_url and creator_url:
+        video_data = extract_data(video_url)
+        creator_data = extract_data(creator_url)
+        
+        retrieved = parse_data(creator_data, video_data)
+        
+    
     video = [
         f"Title: {info.get('title')}",
         f"Description: {info.get('description')}",
@@ -100,19 +154,19 @@ def write_metadata(info: dict, folder_path: str, timestamp: str):
     user = [
         f"Username: {info.get('uploader')}",
         f"Display Name: {info.get('channel')}",
-        f"Followers: {info.get('title')}",
-        f"Following: {info.get('title')}",
-        f"Bio: {info.get('title')}",
+        f"Followers: {retrieved.get('follower_count')}",
+        f"Following: {retrieved.get('following_count')}",
+        f"Bio: \n{retrieved.get('bio')}",
     ]
     
     sound = [
-        f"Sound Name: {info.get('track')}"
+        f"Sound Name: {info.get('track')}",
         f"Sound Creator: {info.get('artist')}"
     ]
     
     with open(folder_path / f"{timestamp}_info.txt", 'w', encoding='utf-8') as f:
-        f.write("##~~ Video Information:\n" + f"\n##~ Video URL: {info.get('original_url')}\n#-- " + "\n#-- ".join(video) + "##~~ Uploader Information:\n" + f"\n##~ Uploader URL: {info.get('uploader_url')}\n#-- " + "\n#-- ".join(user) + "##~~ Sound Information:\n" + f"\n##~ Sound URL: {info.get('uploader_url')}\n#-- " + "\n#-- ".join(sound))
+        f.write("##~~ Video Information:\n" + f"\n##~ Video URL: {video_url}\n#-- " + "\n#-- ".join(video) + "\n\n##~~ Uploader Information:\n" + f"\n##~ Uploader URL: {creator_url}\n#-- " + "\n#-- ".join(user) + "\n\n##~~ Sound Information:\n" + f"\n##~ Sound URL: {retrieved.get('sound_url')}\n##~ Raw Sound URL: {retrieved.get('raw_sound_url')}\n#-- " + "\n#-- ".join(sound))
 
 path = "C:/Users/neina/Desktop/Videos"
 
-#download_video(["https://www.tiktok.com/@cat7cc/video/7619782378092776712"], path)
+download_video(["https://www.tiktok.com/@cat7cc/video/7627600991268998407"], path)
