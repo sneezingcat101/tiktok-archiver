@@ -37,20 +37,26 @@ def parse_data(creator_data: dict, video_data: dict) -> dict:
     # creator data
     # follows
     if user_stats.get('followerCount'):
-        parsed_data['follower_count'] = user_stats.get('followerCount')
+        parsed_data['followers'] = user_stats.get('followerCount')
     else:
-        parsed_data['follower_count'] = 'NoResultFound'
+        parsed_data['followers'] = 'NoResultFound'
         
     if user_stats.get('followingCount'):
-        parsed_data['following_count'] = user_stats.get('followingCount')
+        parsed_data['following'] = user_stats.get('followingCount')
     else:
-        parsed_data['following_count'] = 'NoResultFound'
-        
+        parsed_data['following'] = 'NoResultFound'
+    
+    # names
+    if profile.get('uniqueId'):
+        parsed_data['username'] = profile.get('uniqueId')
+    else:
+        parsed_data['username'] = 'NoResultFound'
+    
     # bio
-    if profile.get('signature'):
-        parsed_data['bio'] = profile.get('signature')
+    if profile.get('nickname'):
+        parsed_data['display_name'] = profile.get('nickname')
     else:
-        parsed_data['bio'] = 'NoResultFound'
+        parsed_data['display_name'] = 'NoResultFound'
         
     # sound urls
     # raw sound download url (to combat sounds url changes name changes)
@@ -90,8 +96,17 @@ def create_shortcut(file_path, shortcut_path):
     shortcut.WorkingDirectory = os.path.dirname(file_path)
     shortcut.save()
 
+def section(header, urls, items):
+    lines = [f"##~~ {header}: ", ""]
+    
+    lines += [f'#~ {u}' for u in urls]
+        
+    lines += [f'#-- {i}' for i in items if i is not None]
+    
+    return "\n".join(lines)
+
 #-- Downloading using yt_dlp
-def download(urls: list, current_path: str):
+def download(urls: list, current_path: str, config: dict):
     
     # Create raws_files folder in path if it's not already there.
     # raws_folder returns parsed ver. of path and creates a raws_folder
@@ -119,9 +134,9 @@ def download(urls: list, current_path: str):
         
         create_shortcut(str(video_folder / f"{video_path}"), str(current_path / f"{timestamp}.lnk"))
         
-        write_metadata(info, video_folder, timestamp)
+        write_metadata(info, video_folder, timestamp, config)
 
-def write_metadata(info: dict, folder_path: str, timestamp: str):
+def write_metadata(info: dict, folder_path: str, timestamp: str, config: dict):
     video_url = info.get('original_url')
     creator_url = info.get('uploader_url')
     
@@ -136,29 +151,34 @@ def write_metadata(info: dict, folder_path: str, timestamp: str):
         
         retrieved = parse_data(creator_data, video_data)
         
-    
     video = [
-        f"Title: {info.get('title')}",
-        f"Description: {info.get('description')}",
-        f"Views: {info.get('view_count')}",
-        f"Likes: {info.get('like_count')}",
-        f"Saves: {info.get('save_count')}",
-        f"Comments: {info.get('comment_count')}",
-        f"Reposts: {info.get('repost_count')}",
+        f"Title: {info.get('title')}" if config.get('title') == True else None,
+        f"Description: {info.get('description')}" if config.get('description') == True else None,
+        f"Views: {info.get('view_count')}" if config.get('views') == True else None,
+        f"Likes: {info.get('like_count')}" if config.get('likes') == True else None,
+        f"Saves: {info.get('save_count')}" if config.get('saves') == True else None,
+        f"Comments: {info.get('comment_count')}" if config.get('comments') == True else None,
+        f"Reposts: {info.get('repost_count')}" if config.get('reposts') == True else None,
     ]
     
     user = [
-        f"Username: {info.get('uploader')}",
-        f"Display Name: {info.get('channel')}",
-        f"Followers: {retrieved.get('follower_count')}",
-        f"Following: {retrieved.get('following_count')}",
-        f"Bio: \n{retrieved.get('bio')}",
+        f"Username: {retrieved.get('username')}" if config.get('username') == True else None,
+        f"Display Name: {retrieved.get('display_name')}" if config.get('display name') == True else None,
+        f"Followers: {retrieved.get('followers')}" if config.get('followers') == True else None,
+        f"Following: {retrieved.get('following')}" if config.get('following') == True else None,
+        f"Bio: \n{retrieved.get('bio')}" if config.get('bio') == True else None,
     ]
     
     sound = [
-        f"Sound Name: {info.get('track')}",
-        f"Sound Creator: {info.get('artist')}"
+        f"Sound Name: {info.get('track')}" if config.get('name') == True else None,
+        f"Sound Creator: {info.get('artist')}" if config.get('creator') == True else None
     ]
     
+    output = "\n\n".join([
+        section("Video Information", [f"Video Url: {video_url}"], video if video else []), 
+        section("Uploader Information", [f"Uploader Url: {creator_url}"], user if user else []),
+        section("Sound Information", [f"Sound Url: {retrieved.get('sound_url')}",f"Raw Sound Url: {retrieved.get('raw_sound_url')}"], sound if sound else [])
+        ])
+    
     with open(folder_path / f"{timestamp}_info.txt", 'w', encoding='utf-8') as f:
-        f.write("##~~ Video Information:\n" + f"\n##~ Video URL: {video_url}\n#-- " + "\n#-- ".join(video) + "\n\n##~~ Uploader Information:\n" + f"\n##~ Uploader URL: {creator_url}\n#-- " + "\n#-- ".join(user) + "\n\n##~~ Sound Information:\n" + f"\n##~ Sound URL: {retrieved.get('sound_url')}\n##~ Raw Sound URL: {retrieved.get('raw_sound_url')}\n#-- " + "\n#-- ".join(sound))
+        f.write(output)

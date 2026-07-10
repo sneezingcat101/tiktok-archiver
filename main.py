@@ -17,6 +17,9 @@ err_line = None
 #-- Path
 chosen_path = None
 
+#-- Config
+config = {}
+
 ##~~ FUNCTIONS ~~##
 ##~ URL-handling Functions
 #-- Pre-defined Error Messageboxes
@@ -24,21 +27,24 @@ def display_error(type: Literal["invalid", "duplicate", "incomplete"] = "invalid
     if index is not None and type == "invalid":
         messagebox.showwarning(title="Warning", message=f"Invalid Tiktok URL in line {index + 1}.") 
     elif type == "invalid":
-        messagebox.showwarning(title="Warning", message=f"Invalid Tiktok URL.")
+        messagebox.showwarning(title="Warning", message="Invalid Tiktok URL.")
         
     if index is not None and type == "incomplete":
         messagebox.showwarning(title="Warning", message=f"Incomplete Tiktok URL at line {index + 1}.") 
     elif type == "incomplete":
-        messagebox.showwarning(title="Warning", message=f"Incomplete Tiktok URL.")
+        messagebox.showwarning(title="Warning", message="Incomplete Tiktok URL.")
         
     if type == "duplicate":
-        messagebox.showwarning(title="Warning", message=f"This URL is already in the list!")
+        messagebox.showwarning(title="Warning", message="This URL is already in the list!")
         
     if type == "path":
-        messagebox.showwarning(title="Warning", message=f"Invalid path!")
+        messagebox.showwarning(title="Warning", message="Invalid path!")
         
     if type == "empty":
-        messagebox.showwarning(title="Warning", message=f"You have to enter a URL before the download can start!")
+        messagebox.showwarning(title="Warning", message="You have to enter a URL before the download can start!")
+        
+    if type == "config":
+        messagebox.showwarning(title="Warning", message=f"Error in config at line {index + 1}.")
     
 #-- Rebuild URL link (remove garbage at the end)
 def rebuild(url) -> str:
@@ -93,7 +99,29 @@ def clean_entries():
             if not err:
                 err = status
                 err_line = len(entered_urls) - 1
+
+##~ Config Functions
+#--
+def parse_config() -> bool:
+    raw_config = configs_box.get(0.0, ctk.END).splitlines()
     
+    for index, line in enumerate(raw_config):
+        line = line.lower().strip()
+        
+        if line.startswith("#") or line == "":
+            continue
+        
+        if "=" not in line:
+            err = "config"
+            err_line = index
+            return False
+        
+        key, value = line[0:line.index("=") - 1], line[line.index("=") + 2:len(line)]
+
+        config[key] = value == "true"
+        
+    return True
+
 ##~ Button Functions
 #-- Function for the 'add' button of the single line URL entry
 def add_URL():
@@ -143,9 +171,12 @@ def start_download():
     if not valid_urls:
         display_error("empty")
         return
+    
+    if parse_config() == False:
+        display_error(err, err_line)
 
     # download starts below
-    download(valid_urls, chosen_path)
+    download(valid_urls, chosen_path, config)
 
 #-- Search for path
 def browse_path():
@@ -236,6 +267,8 @@ ctk.CTkButton(left_frame, border_width=1, text="Clear", width=35, fg_color="whit
 #-- Toggles
 configs_box = ctk.CTkTextbox(right_frame, text_color="black", fg_color="white", corner_radius=0, border_width=1, font=("Arial", 10), wrap="none", height=230)
 configs_box.pack(fill="x", side=ctk.TOP, padx=4, pady=4)
+
+configs_box.insert(0.0, "##~~ Data to include in the download\n# true: Include | false: Don't include\n\n##~ Video\nvideo file = true\n# title & description are often the same\ntitle = false\ndescription = true\nviews = false\nlikes = false\nsaves = false\ncomments = false\nreposts = false\n\n##~ Creator\nusername = true\ndisplay name = false\nfollowers = false\nfollowing = false\nbio = false\n\n##~ Sound\nsound file = false\nname = false\ncreator = false")
 
 #-- Save/Reset config Buttons
 ctk.CTkButton(right_frame, border_width=1, text="Save", width=35, fg_color="white", text_color="black", corner_radius=0).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
