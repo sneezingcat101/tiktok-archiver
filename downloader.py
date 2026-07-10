@@ -12,8 +12,6 @@ HEADERS = {
     'Accept-Language': 'en-US,en;q=0.9',
 }
 
-_user_cache = {}
-
 def extract_data(url: str) -> dict:
     response = requests.get(url, headers=HEADERS, timeout=20)
     
@@ -69,9 +67,6 @@ def parse_data(creator_data: dict, video_data: dict) -> dict:
         
     return parsed_data
     
-        
-    
-
 def raws_folder(path) -> Path:
     if not path:
         return False
@@ -96,12 +91,13 @@ def create_shortcut(file_path, shortcut_path):
     shortcut.save()
 
 #-- Downloading using yt_dlp
-def download_video(urls: list, path: str):
+def download(urls: list, current_path: str):
     
     # Create raws_files folder in path if it's not already there.
-    path = raws_folder(path)
+    # raws_folder returns parsed ver. of path and creates a raws_folder
+    current_path = raws_folder(current_path)
     
-    if not path:
+    if not current_path:
         return False
     
     # Download each URL
@@ -109,7 +105,7 @@ def download_video(urls: list, path: str):
         timestamp = f"{datetime.now():%Y-%m-%d_%H-%M-%S}"
         
         # Create folder for each video's raw files
-        video_folder = path / "raw_files" / timestamp
+        video_folder = current_path / "raw_files" / timestamp
         video_folder.mkdir(parents=True, exist_ok=True)
         
         options = {
@@ -121,7 +117,7 @@ def download_video(urls: list, path: str):
             info = ydl.extract_info(url, download=True)   # download once
             video_path = ydl.prepare_filename(info)  
         
-        create_shortcut(str(video_folder / f"{video_path}"), str(path / f"{timestamp}.lnk"))
+        create_shortcut(str(video_folder / f"{video_path}"), str(current_path / f"{timestamp}.lnk"))
         
         write_metadata(info, video_folder, timestamp)
 
@@ -166,7 +162,3 @@ def write_metadata(info: dict, folder_path: str, timestamp: str):
     
     with open(folder_path / f"{timestamp}_info.txt", 'w', encoding='utf-8') as f:
         f.write("##~~ Video Information:\n" + f"\n##~ Video URL: {video_url}\n#-- " + "\n#-- ".join(video) + "\n\n##~~ Uploader Information:\n" + f"\n##~ Uploader URL: {creator_url}\n#-- " + "\n#-- ".join(user) + "\n\n##~~ Sound Information:\n" + f"\n##~ Sound URL: {retrieved.get('sound_url')}\n##~ Raw Sound URL: {retrieved.get('raw_sound_url')}\n#-- " + "\n#-- ".join(sound))
-
-path = "C:/Users/neina/Desktop/Videos"
-
-download_video(["https://www.tiktok.com/@cat7cc/video/7627600991268998407"], path)

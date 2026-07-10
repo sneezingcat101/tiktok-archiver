@@ -2,12 +2,20 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from urllib.parse import urlparse
 from typing import Literal
+from downloader import download
 
 ##~~ GLOBAL VARIABLES ~~##
+#-- URLS
 valid_urls = []
 entered_urls = []
-err = {}
 seen = set()
+
+#-- Error and the line
+err = None
+err_line = None
+
+#-- Path
+chosen_path = None
 
 ##~~ FUNCTIONS ~~##
 ##~ URL-handling Functions
@@ -25,16 +33,22 @@ def display_error(type: Literal["invalid", "duplicate", "incomplete"] = "invalid
         
     if type == "duplicate":
         messagebox.showwarning(title="Warning", message=f"This URL is already in the list!")
+        
+    if type == "path":
+        messagebox.showwarning(title="Warning", message=f"Invalid path!")
+        
+    if type == "empty":
+        messagebox.showwarning(title="Warning", message=f"You have to enter a URL before the download can start!")
     
 #-- Rebuild URL link (remove garbage at the end)
-def rebuild(url):
+def rebuild(url) -> str:
     parsed = urlparse(url)
     
     # return example: "https://www.tiktok.com/@btimbklm96485/video/7608125327763574029"
     return parsed.scheme + "://" + parsed.netloc + parsed.path
 
 #-- Classify URL by parsing and then performing checks (returns "invalid", incomplete", and "valid" accordingly)
-def classify_url(url):
+def classify_url(url) -> str:
     # urlparse returns tuple with scheme (https), netloc (www.tiktok.com), path (/@user/video/videoId), params, query, fragment
     parsed = urlparse(url)
     
@@ -56,7 +70,8 @@ def clean_entries():
     seen.clear()
     valid_urls.clear()
     entered_urls.clear()
-    err.clear()
+    err = None
+    err_line = None
 
     # Get, check, and sort the URLs. 
     # Removes any duplicates, cleans white space and empty lines, ignores garbage
@@ -76,7 +91,8 @@ def clean_entries():
             entered_urls.append(line)
             seen.add(line)
             if not err:
-                err[len(entered_urls) - 1] = status
+                err = status
+                err_line = len(entered_urls) - 1
     
 ##~ Button Functions
 #-- Function for the 'add' button of the single line URL entry
@@ -106,7 +122,7 @@ def add_URL():
     update_textbox()
 
 #-- Function for the 'download' button to begin the process of downloading off the list
-def download():
+def start_download():
     # Clean URLs and update the Textbox for the errors to display correctly and cleanly
     clean_entries()
     update_textbox()
@@ -114,14 +130,27 @@ def download():
     # Popup error if an unfinished link is found.
     if err:
         update_textbox()
-        display_error(next(iter(err.values())), next(iter(err)))
+        display_error(err, err_line)
         return
     
+    # Get path and check if empty ---> add path validation
+    chosen_path = dir_entry.get()
+    if not chosen_path:
+        display_error("path")
+        return
+        
+    # Return if valid_urls empty
+    if not valid_urls:
+        display_error("empty")
+        return
+
     # download starts below
+    download(valid_urls, chosen_path)
 
 #-- Search for path
 def browse_path():
     path = filedialog.askdirectory()
+    print(path)
     if path:
         dir_entry.delete(0, ctk.END)
         dir_entry.insert(0, path)
@@ -200,7 +229,7 @@ url_entrybox = ctk.CTkTextbox(left_frame, text_color="black", fg_color="white", 
 url_entrybox.pack(fill="x", side=ctk.TOP, padx=4, pady=4)
     
 #-- Download/Clear Buttons
-ctk.CTkButton(left_frame, border_width=1, text="Download", width=35, fg_color="white", text_color="black", corner_radius=0, command=download).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
+ctk.CTkButton(left_frame, border_width=1, text="Download", width=35, fg_color="white", text_color="black", corner_radius=0, command=start_download).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
 ctk.CTkButton(left_frame, border_width=1, text="Clear", width=35, fg_color="white", text_color="black", corner_radius=0, command=clear_urls).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
 
 ##~ Right
