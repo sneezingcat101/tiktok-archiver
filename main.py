@@ -44,9 +44,9 @@ def load():
         
     if save.get('config'):
         config_lines = save.get('config', [])
+        update_config()
     else:
-        config_lines = ['##~~ Data to include in the download', "# true: Include | false: Don't include", '', '##~ Video', 'video file = true', '# title & description are often the same', 'title = false', 'description = true', 'views = false', 'likes = false', 'saves = false', 'comments = false', 'reposts = false', '', '##~ Creator', 'username = true', 'display name = false', 'followers = false', 'following = false', 'bio = false', '', '##~ Sound', 'sound file = false', 'name = false', 'creator = false']
-    update_config()
+        reset_config()
 
 def save():
     if chosen_path:
@@ -55,7 +55,8 @@ def save():
     clean_entries()
     if entered_urls:
         data['entered_urls'] = entered_urls
-        
+    
+    save_config()
     if config_lines:
         data['config'] = config_lines
     
@@ -152,9 +153,9 @@ def clean_entries():
 def parse_config() -> bool:
     global err, err_line
     
-    raw_config = configs_box.get(0.0, ctk.END).splitlines()
+    save_config()
     
-    for index, line in enumerate(raw_config):
+    for index, line in enumerate(config_lines):
         line = line.lower().strip()
         
         if line.startswith("#") or line == "":
@@ -246,7 +247,11 @@ def save_path():
     
     if path.exists() and path.is_dir():
         chosen_path = str(path)
-        
+
+def save_config():
+    global config_lines
+    
+    config_lines = configs_box.get(0.0, ctk.END).splitlines()
     
 #-- Clear the URLs Textbox
 def clear_urls():
@@ -267,6 +272,14 @@ def update_path():
 def update_config():
     configs_box.delete(0.0, ctk.END)
     configs_box.insert(0.0, "\n".join(config_lines))
+
+def reset_config():
+    global config_lines
+    
+    response = messagebox.askyesno(title="Warning", message="Are you sure you would like to reset your config? This cannot be reverted.")
+    if (response):
+        config_lines = ['##~~ Data to include in the download', "# true: Include | false: Don't include", '', '##~ Video', 'video file = true', '# title & description are often the same', 'title = false', 'description = true', 'views = false', 'likes = false', 'saves = false', 'comments = false', 'reposts = false', '', '##~ Creator', 'username = true', 'display name = false', 'followers = false', 'following = false', 'bio = false', '', '##~ Sound', 'sound file = false', 'name = false', 'creator = false']
+        update_config()
 
 ##~~ UI ~~##
 root = ctk.CTk()
@@ -339,7 +352,7 @@ configs_box = ctk.CTkTextbox(right_frame, text_color="black", fg_color="white", 
 configs_box.pack(fill="x", side=ctk.TOP, padx=4, pady=4)
 
 #-- Save/Reset config Buttons
-ctk.CTkButton(right_frame, border_width=1, text="Reset", width=35, fg_color="white", text_color="black", corner_radius=0).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
+ctk.CTkButton(right_frame, border_width=1, text="Reset", width=35, fg_color="white", text_color="black", corner_radius=0, command=reset_config).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
 
 ##
 load()
