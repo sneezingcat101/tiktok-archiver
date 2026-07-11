@@ -3,6 +3,9 @@ from tkinter import filedialog, messagebox
 from urllib.parse import urlparse
 from typing import Literal
 from downloader import download
+from pathlib import Path
+import json
+import atexit
 
 ##~~ GLOBAL VARIABLES ~~##
 #-- URLS
@@ -18,9 +21,51 @@ err_line = None
 chosen_path = None
 
 #-- Config
+config_lines = []
 config = {}
 
+data = {}
+
 ##~~ FUNCTIONS ~~##
+##~ Save/load functions
+def load():
+    global chosen_path, entered_urls, config_lines
+    
+    with open("save.json", "r") as file:
+        save = json.load(file)
+        
+    if save.get('path'):
+        chosen_path = save.get('path', "")
+        update_path()
+        
+    if save.get('entered_urls'):
+        entered_urls = save.get('entered_urls', [])
+        update_textbox()
+        
+    if save.get('config'):
+        config_lines = save.get('config', [])
+    else:
+        config_lines = ['##~~ Data to include in the download', "# true: Include | false: Don't include", '', '##~ Video', 'video file = true', '# title & description are often the same', 'title = false', 'description = true', 'views = false', 'likes = false', 'saves = false', 'comments = false', 'reposts = false', '', '##~ Creator', 'username = true', 'display name = false', 'followers = false', 'following = false', 'bio = false', '', '##~ Sound', 'sound file = false', 'name = false', 'creator = false']
+    update_config()
+
+def save():
+    if chosen_path:
+        data['path'] = chosen_path
+        
+    clean_entries()
+    if entered_urls:
+        data['entered_urls'] = entered_urls
+        
+    if config_lines:
+        data['config'] = config_lines
+    
+    with open("save.json", "w") as file:
+        json.dump(data, file, indent=2)
+
+def on_close():
+    save()
+    root.destroy()
+
 ##~ URL-handling Functions
 #-- Pre-defined Error Messageboxes
 def display_error(type: Literal["invalid", "duplicate", "incomplete"] = "invalid", index: int = None):
@@ -72,6 +117,8 @@ def classify_url(url) -> str:
 
 #-- Clean up the pre-existing entries. Changes entered_urls for entries only in textbox.
 def clean_entries():
+    global err, err_line
+    
     # Clean up global functions
     seen.clear()
     valid_urls.clear()
@@ -103,6 +150,8 @@ def clean_entries():
 ##~ Config Functions
 #--
 def parse_config() -> bool:
+    global err, err_line
+    
     raw_config = configs_box.get(0.0, ctk.END).splitlines()
     
     for index, line in enumerate(raw_config):
@@ -111,12 +160,12 @@ def parse_config() -> bool:
         if line.startswith("#") or line == "":
             continue
         
-        if "=" not in line:
+        if '=' not in line:
             err = "config"
             err_line = index
             return False
         
-        key, value = line[0:line.index("=") - 1], line[line.index("=") + 2:len(line)]
+        key, value = line[:line.index('=')].strip(), line[line.index("=") + 1:].strip()
 
         config[key] = value == "true"
         
@@ -161,8 +210,8 @@ def start_download():
         display_error(err, err_line)
         return
     
-    # Get path and check if empty ---> add path validation
-    chosen_path = dir_entry.get()
+    # Check if valid path or if empty
+    save_path()
     if not chosen_path:
         display_error("path")
         return
@@ -174,18 +223,31 @@ def start_download():
     
     if parse_config() == False:
         display_error(err, err_line)
+        return
 
     # download starts below
     download(valid_urls, chosen_path, config)
 
 #-- Search for path
 def browse_path():
-    path = filedialog.askdirectory()
-    print(path)
-    if path:
-        dir_entry.delete(0, ctk.END)
-        dir_entry.insert(0, path)
+    global chosen_path
+    chosen_path = filedialog.askdirectory()
+    
+    update_path()
+    save_path()
 
+def save_path():
+    global chosen_path
+    
+    if not dir_entry.get():
+        return
+    
+    path = Path(dir_entry.get())
+    
+    if path.exists() and path.is_dir():
+        chosen_path = str(path)
+        
+    
 #-- Clear the URLs Textbox
 def clear_urls():
     response = messagebox.askyesno(title="Warning", message="Are you sure you would like to clear all URLs? This cannot be reverted.")
@@ -197,6 +259,14 @@ def clear_urls():
 def update_textbox():
     url_entrybox.delete(0.0, ctk.END)
     url_entrybox.insert(0.0, "\n".join(entered_urls))
+    
+def update_path():
+    dir_entry.delete(0, ctk.END)
+    dir_entry.insert(0, chosen_path)
+
+def update_config():
+    configs_box.delete(0.0, ctk.END)
+    configs_box.insert(0.0, "\n".join(config_lines))
 
 ##~~ UI ~~##
 root = ctk.CTk()
@@ -268,11 +338,10 @@ ctk.CTkButton(left_frame, border_width=1, text="Clear", width=35, fg_color="whit
 configs_box = ctk.CTkTextbox(right_frame, text_color="black", fg_color="white", corner_radius=0, border_width=1, font=("Arial", 10), wrap="none", height=230)
 configs_box.pack(fill="x", side=ctk.TOP, padx=4, pady=4)
 
-configs_box.insert(0.0, "##~~ Data to include in the download\n# true: Include | false: Don't include\n\n##~ Video\nvideo file = true\n# title & description are often the same\ntitle = false\ndescription = true\nviews = false\nlikes = false\nsaves = false\ncomments = false\nreposts = false\n\n##~ Creator\nusername = true\ndisplay name = false\nfollowers = false\nfollowing = false\nbio = false\n\n##~ Sound\nsound file = false\nname = false\ncreator = false")
-
 #-- Save/Reset config Buttons
-ctk.CTkButton(right_frame, border_width=1, text="Save", width=35, fg_color="white", text_color="black", corner_radius=0).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
 ctk.CTkButton(right_frame, border_width=1, text="Reset", width=35, fg_color="white", text_color="black", corner_radius=0).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
 
 ##
+load()
+root.protocol("WM_DELETE_WINDOW", on_close)
 root.mainloop()

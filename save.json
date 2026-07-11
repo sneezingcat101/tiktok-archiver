@@ -1,0 +1,30 @@
+{
+  "path": "C:\\Users\\neina\\Desktop\\tiktok vids",
+  "config": [
+    "##~~ Data to include in the download",
+    "# true: Include | false: Don't include",
+    "",
+    "##~ Video",
+    "video file = true",
+    "# title & description are often the same",
+    "title = false",
+    "description = true",
+    "views = false",
+    "likes = false",
+    "saves = false",
+    "comments = false",
+    "reposts = false",
+    "",
+    "##~ Creator",
+    "username = true",
+    "display name = false",
+    "followers = false",
+    "following = false",
+    "bio = false",
+    "",
+    "##~ Sound",
+    "sound file = false",
+    "name = false",
+    "creator = false"
+  ]
+}
