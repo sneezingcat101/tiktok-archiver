@@ -4,8 +4,7 @@ from urllib.parse import urlparse
 from typing import Literal
 from downloader import download
 from pathlib import Path
-import json
-import atexit
+import json, atexit
 
 ##~~ GLOBAL VARIABLES ~~##
 #-- URLS
@@ -23,7 +22,9 @@ chosen_path = None
 #-- Config
 config_lines = []
 config = {}
+default_config = ['##~~ Data to include in the download', "# true: Include | false: Don't include", '', '##~ Video', 'video file = true', '# title & description are often the same', 'title = false', 'description = true', 'views = false', 'likes = false', 'saves = false', 'comments = false', 'reposts = false', '', '##~ Creator', 'username = true', 'display name = false', 'followers = false', 'following = false', 'bio = false', '', '##~ Sound', 'sound file = false', 'name = false', 'creator = false']
 
+#-- Data to be stored in save.json
 data = {}
 
 ##~~ FUNCTIONS ~~##
@@ -31,23 +32,34 @@ data = {}
 def load():
     global chosen_path, entered_urls, config_lines
     
-    with open("save.json", "r") as file:
-        save = json.load(file)
+    # Open previous save file
+    try:
+        with open("save.json", "r") as file:
+            save = json.load(file)
+    # If save is corrupted or not found, create one
+    except (FileNotFoundError, json.JSONDecodeError):
+        save = {}
+        with open("save.json", "w") as file:
+            json.dump(save, file)
         
+    # Check for a path in save file
     if save.get('path'):
         chosen_path = save.get('path', "")
         update_path()
-        
+    
+    # Check for previously entered urls
     if save.get('entered_urls'):
         entered_urls = save.get('entered_urls', [])
         update_textbox()
-        
+    
+    # Check for config
     if save.get('config'):
         config_lines = save.get('config', [])
-        update_config()
     else:
-        reset_config()
+        config_lines = default_config
+    update_config()
 
+#-- Save entries, path, and config to save.json
 def save():
     if chosen_path:
         data['path'] = chosen_path
@@ -63,6 +75,7 @@ def save():
     with open("save.json", "w") as file:
         json.dump(data, file, indent=2)
 
+#-- Rewire X button to fire save() before closing
 def on_close():
     save()
     root.destroy()
@@ -149,25 +162,31 @@ def clean_entries():
                 err_line = len(entered_urls) - 1
 
 ##~ Config Functions
-#--
+#-- Parse config into dict to be sent to downloader
 def parse_config() -> bool:
     global err, err_line
     
+    # Save the config so the config_lines var. updates
     save_config()
     
+    # Put each option into the dict, accounting for improperly structured lines
     for index, line in enumerate(config_lines):
         line = line.lower().strip()
         
+        # Ignore lines starting with # (comments) and empty lines
         if line.startswith("#") or line == "":
             continue
         
+        # Send error if a line doesn't have '='
         if '=' not in line:
             err = "config"
             err_line = index
             return False
         
+        # Key = Value
         key, value = line[:line.index('=')].strip(), line[line.index("=") + 1:].strip()
-
+        
+        # value == "true" will return the actual boolean rather than str. e.g true == true -> True, false == true -> False
         config[key] = value == "true"
         
     return True
@@ -225,6 +244,8 @@ def start_download():
     if parse_config() == False:
         display_error(err, err_line)
         return
+    
+    save()
 
     # download starts below
     download(valid_urls, chosen_path, config)
@@ -237,17 +258,22 @@ def browse_path():
     update_path()
     save_path()
 
+#-- Save the written path to the chosen_path var. with checks
 def save_path():
     global chosen_path
     
+    # Return if the directory line is empty.
     if not dir_entry.get():
         return
     
+    # Turn the path into a Path object
     path = Path(dir_entry.get())
     
+    # Check if the path exists and if its a valid path to a folder
     if path.exists() and path.is_dir():
         chosen_path = str(path)
 
+#-- Save every line of the config into config_lines list
 def save_config():
     global config_lines
     
@@ -264,21 +290,24 @@ def clear_urls():
 def update_textbox():
     url_entrybox.delete(0.0, ctk.END)
     url_entrybox.insert(0.0, "\n".join(entered_urls))
-    
+
+#-- Update the path with the path in chosen_path
 def update_path():
     dir_entry.delete(0, ctk.END)
     dir_entry.insert(0, chosen_path)
 
+#-- Repopulate the config with the lines in config_lines
 def update_config():
     configs_box.delete(0.0, ctk.END)
     configs_box.insert(0.0, "\n".join(config_lines))
 
+#-- Reset config to default
 def reset_config():
     global config_lines
     
     response = messagebox.askyesno(title="Warning", message="Are you sure you would like to reset your config? This cannot be reverted.")
     if (response):
-        config_lines = ['##~~ Data to include in the download', "# true: Include | false: Don't include", '', '##~ Video', 'video file = true', '# title & description are often the same', 'title = false', 'description = true', 'views = false', 'likes = false', 'saves = false', 'comments = false', 'reposts = false', '', '##~ Creator', 'username = true', 'display name = false', 'followers = false', 'following = false', 'bio = false', '', '##~ Sound', 'sound file = false', 'name = false', 'creator = false']
+        config_lines = default_config
         update_config()
 
 ##~~ UI ~~##
@@ -354,7 +383,12 @@ configs_box.pack(fill="x", side=ctk.TOP, padx=4, pady=4)
 #-- Save/Reset config Buttons
 ctk.CTkButton(right_frame, border_width=1, text="Reset", width=35, fg_color="white", text_color="black", corner_radius=0, command=reset_config).pack(pady=(0,4), padx=(0,4), side=ctk.RIGHT)
 
-##
+##~~ Startup functions
 load()
+
+#-- Rewire X button to close
 root.protocol("WM_DELETE_WINDOW", on_close)
+atexit.register(save)
+
+#-- Open app
 root.mainloop()
